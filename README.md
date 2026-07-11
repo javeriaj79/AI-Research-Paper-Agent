@@ -1,5 +1,5 @@
 # AI Research Paper Discovery Agent
-An automated n8n workflow that discovers, scores, and summarizes the most relevant AI/ML research papers from arXiv — delivering a daily digest via email and logging results to Google Sheets.
+An automated n8n workflow that discovers, scores, and summarizes the most relevant AI/ML research papers from arXiv, delivering a daily digest via email and logging results to Google Sheets.
 
 ## Problem it solves
 Keeping up with new AI/ML research is time-consuming. This agent automates the discovery and triage process, surfacing only the most relevant, high-impact papers instead of requiring manual review of dozens of new arXiv submissions every day.
@@ -21,11 +21,11 @@ Keeping up with new AI/ML research is time-consuming. This agent automates the d
 ![Workflow Diagram](workflow-diagram.png)
 
 ## Tech stack
-- **n8n** — workflow orchestration and automation
-- **Mistral AI** — LLM used for summarization and relevance scoring
-- **arXiv API** — source of daily research papers
-- **Google Sheets API** — persistent log of all qualifying papers
-- **Gmail API** — daily digest delivery
+- **n8n**:workflow orchestration and automation
+- **Mistral AI**: LLM used for summarization and relevance scoring
+- **arXiv API**:source of daily research papers
+- **Google Sheets API**:persistent log of all qualifying papers
+- **Gmail API**:daily digest delivery
 
 ## Key design decisions
 - **Calibrated scoring rubric:** early iterations of the prompt caused score inflation (the LLM rated almost everything highly). The prompt was rewritten with an explicit 1–10 rubric and instructions to be a strict, selective reviewer, which produced a much more meaningful score distribution.
