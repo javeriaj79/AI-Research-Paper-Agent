@@ -1,0 +1,478 @@
+{
+  "name": "AI Research",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -1136,
+        16
+      ],
+      "id": "49f85072-9933-4276-a2a3-a4e3d87c8846",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "http://export.arxiv.org/api/query?search_query=cat:cs.AI+OR+cat:cs.LG+OR+cat:cs.CV+OR+cat:cs.CL+OR+cat:eess.IV&sortBy=submittedDate&sortOrder=descending&max_results=30",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -928,
+        16
+      ],
+      "id": "7874ea8c-5e55-438f-b03d-318631d0379a",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const xml = $input.first().json.data;\n\n// Simple regex-based parser for arXiv Atom feed\nconst entries = xml.split('<entry>').slice(1);\n\nconst papers = entries.map(entry => {\n  const getTag = (tag) => {\n    const match = entry.match(new RegExp(`<${tag}>([\\\\s\\\\S]*?)<\\\\/${tag}>`));\n    return match ? match[1].trim().replace(/\\s+/g, ' ') : '';\n  };\n\n  const title = getTag('title');\n  const summary = getTag('summary');\n  const idMatch = entry.match(/<id>(.*?)<\\/id>/);\n  const link = idMatch ? idMatch[1].trim() : '';\n  const published = getTag('published');\n\n  // Extract authors\n  const authorMatches = [...entry.matchAll(/<name>(.*?)<\\/name>/g)];\n  const authors = authorMatches.map(m => m[1]).join(', ');\n\n  return {\n    title,\n    abstract: summary,\n    link,\n    published,\n    authors\n  };\n});\n\nreturn papers.map(paper => ({ json: paper }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        16
+      ],
+      "id": "fecfbd62-8fb5-46fa-8a7a-0e22fa53007b",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a research assistant helping an AI/ML graduate student track ONLY the most important, high-impact papers for PhD applications. Be a strict, selective reviewer — most papers should score low. Only genuinely novel, influential, or highly relevant work should score high.\n\nThis student's broad research interest covers: artificial intelligence, machine learning, deep learning, computer vision, biomedical AI, AI in healthcare, natural language processing (NLP), and retrieval-augmented generation (RAG) — treat all of these as ONE combined interest area, not separate categories.\n\nGiven this paper's title and abstract, do two things:\n1. Write a 2-line plain-English summary of what the paper does\n2. Give ONE single overall relevance score from 1 to 10 (a single integer, never a breakdown by topic) using this rubric:\n   - 1-3: Incremental, narrow, or unrelated to the student's interest area\n   - 4-6: Solid work but not groundbreaking or only loosely related\n   - 7-8: Strong, novel contribution directly relevant to the interest area\n   - 9-10: Exceptional, field-shifting work (rare)\n\nPaper title: {{ $json.title }}\nAbstract: {{ $json.abstract }}\n\nIMPORTANT: \"score\" must ALWAYS be a single plain integer, never an object or breakdown. Respond ONLY with valid JSON in this EXACT format, nothing else:\n{\"summary\": \"your summary here\", \"score\": 7}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -512,
+        16
+      ],
+      "id": "79169f6b-393d-4e81-9fde-5eb6ce90196f",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst originalItems = $('Code in JavaScript').all();\n\nfunction extractScore(parsed) {\n  let s = parsed.score;\n  if (typeof s === 'object' && s !== null) {\n    const values = Object.values(s).filter(v => typeof v === 'number');\n    if (values.length > 0) {\n      s = values.reduce((a, b) => a + b, 0) / values.length; // average nikal lo\n    } else {\n      s = 0;\n    }\n  }\n  const num = Number(s);\n  return isNaN(num) ? 0 : num;\n}\n\nreturn items.map((item, index) => {\n  let rawText = item.json.output || item.json.text || '';\n  if (typeof rawText === 'object') {\n    rawText = JSON.stringify(rawText);\n  }\n  const jsonMatch = rawText.match(/\\{[\\s\\S]*\\}/);\n\n  let parsed;\n  try {\n    parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { summary: \"Parse failed\", score: 0 };\n  } catch (e) {\n    parsed = { summary: \"Parse failed\", score: 0 };\n  }\n\n  const original = originalItems[index] ? originalItems[index].json : {};\n\n  return {\n    json: {\n      title: original.title,\n      abstract: original.abstract,\n      link: original.link,\n      published: original.published,\n      authors: original.authors,\n      summary: typeof parsed.summary === 'object' ? JSON.stringify(parsed.summary) : parsed.summary,\n      score: extractScore(parsed)\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -416,
+        -144
+      ],
+      "id": "96aa2109-8d78-408a-b7cd-be410b42c997",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ae846a21-9b60-471f-8e05-3ffe8e3efbf7",
+              "leftValue": "={{ $json.score }}",
+              "rightValue": 8,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -240,
+        -144
+      ],
+      "id": "6d642ea1-0408-4764-b9a8-c1332b9376eb",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "AI Research Papers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID/edit"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Title": "={{ $json.title }}",
+            "Summary": "={{ $json.summary }}",
+            "Score": "={{ $json.score }}",
+            "Link": "={{ $json.link }}",
+            "Authors": "={{ $json.authors }}",
+            "Date": "={{ $json.published }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Title",
+              "displayName": "Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Summary",
+              "displayName": "Summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Score",
+              "displayName": "Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Link",
+              "displayName": "Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Authors",
+              "displayName": "Authors",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        448,
+        96
+      ],
+      "id": "2caf5830-a4b5-4b46-a21e-163c7f491282",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "0LfMlxNBHaca1N5r",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "your-email@example.com",
+        "subject": "=Daily AI paper digest — {{ $json.paperCount }} paper(s)",
+        "message": "={{ $json.digestText }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        -144
+      ],
+      "id": "985cbcaa-4f4e-474d-a903-89faa7886987",
+      "name": "Send a message",
+      "webhookId": "7b77cd12-3e21-41d4-9e1b-66c15499acf6",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "Vh5trsqijPCjntFh",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        0,
+        128
+      ],
+      "id": "e13ad0af-d917-4298-a2b8-00fe9fc06c55",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "fieldsToAggregate": {
+          "fieldToAggregate": [
+            {
+              "fieldToAggregate": "title"
+            },
+            {
+              "fieldToAggregate": "summary"
+            },
+            {
+              "fieldToAggregate": "score"
+            },
+            {
+              "fieldToAggregate": "link"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        112,
+        -240
+      ],
+      "id": "8642b21d-39ec-494c-ac4d-6cb5aab929ee",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst titles = data.title || [];\nconst summaries = data.summary || [];\nconst scores = data.score || [];\nconst links = data.link || [];\n\nlet digest = `Found ${titles.length} relevant paper(s) today:<br><br>`;\n\nfor (let i = 0; i < titles.length; i++) {\n  digest += `<b>Paper ${i + 1}: ${titles[i]}</b><br>`;\n  digest += `${summaries[i]}<br>`;\n  digest += `Score: ${scores[i]}/10<br>`;\n  digest += `Link: <a href=\"${links[i]}\">${links[i]}</a>`;\n  digest += `<br><br>———<br><br>`;\n}\n\nreturn [{ json: { digestText: digest, paperCount: titles.length } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        -144
+      ],
+      "id": "9d8081ec-51fb-403b-829d-07990cad2244",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "sortFieldsUi": {
+          "sortField": [
+            {
+              "fieldName": "score",
+              "order": "descending"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.sort",
+      "typeVersion": 1,
+      "position": [
+        -96,
+        -224
+      ],
+      "id": "1c82f251-3154-491e-9539-a7def87a5137",
+      "name": "Sort"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatMistralCloud",
+      "typeVersion": 1,
+      "position": [
+        -656,
+        224
+      ],
+      "id": "bdb7d862-0151-47ad-b2a5-50778b821b85",
+      "name": "Mistral Cloud Chat Model",
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "XcmuGe9xCUmgBSHd",
+          "name": "Mistral Cloud account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Sort",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sort": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mistral Cloud Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "2e54aa51-e847-46f8-a9ea-7eb9a2126874",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "44995f9055101321edc35cdd9eb8aae1ee947eee9580cbe43f18981430017782"
+  },
+  "nodeGroups": [],
+  "id": "krKKNdMETQNr8sYW",
+  "tags": []
+}
